@@ -1,145 +1,117 @@
 import discord
-from discord import app_commands
+from discord.ext import commands
 import os
-import re
+from flask import Flask
+from threading import Thread
 
-# ====== TOKEN FROM RENDER ENVIRONMENT ======
-TOKEN = os.environ["TOKEN"]
+# =========================
+# KEEP RENDER ALIVE (WEB SERVER)
+# =========================
 
-# ====== INTENTS ======
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+def run():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# =========================
+# DISCORD BOT SETUP
+# =========================
+
 intents = discord.Intents.default()
 intents.message_content = True
-intents.guilds = True
 
-client = discord.Client(intents=intents)
-tree = app_commands.CommandTree(client)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ====== BINGO WORDS ======
+TOKEN = os.getenv("TOKEN")
+
+if not TOKEN:
+    print("TOKEN not found!")
+    exit(1)
+
+# =========================
+# BINGO WORDS
+# =========================
+
 BINGO_WORDS = [
-    "diddy","epstin","gay","fuck","goon","dick",
-    "wanna play jjs","i want to be mod","can i be mod",
-    "give me mod","gimme mod","mono","yuta slander",
-    "pets","israel","netanyahu","bum","1v1","yuta fraud!",
-    "isreal","emoji_50","emoji_51","ilachie","i3gabe",
-    "i3puck","ileren","i3mono","ilcosmo","i3jeff",
-    "ilangel","iljuls","ilnaoya","ilnoemi",
-    "ilcryptt","ic","im goated"
+    "diddy",
+    "epstein",
+    "sus",
+    "crazy",
+    "wild",
+    "lol",
+    "bruh",
+    "nah",
+    "what",
+    "real",
+    "fake",
+    "insane",
+    "bro",
+    "why",
+    "no way",
+    "stop",
+    "wait",
+    "serious",
+    "joke",
+    "cap",
+    "facts",
+    "ok",
+    "fine",
+    "wow",
+    "huh",
+    "really",
+    "true",
+    "mad",
+    "bad",
+    "good",
+    "clean",
+    "crazyyy",
+    "yo",
+    "man",
+    "girl",
+    "brother"
 ]
 
-# ====== SERVER STORAGE ======
-guild_data = {}
+marked_words = set()
 
-def get_data(guild_id):
-    if guild_id not in guild_data:
-        guild_data[guild_id] = {
-            "active": False,
-            "marked": set()
-        }
-    return guild_data[guild_id]
+# =========================
+# EVENTS
+# =========================
 
-# ====== BOT READY ======
-@client.event
+@bot.event
 async def on_ready():
-    await tree.sync()
-    print(f"Logged in as {client.user}")
+    print(f"Logged in as {bot.user}")
 
-# ====== MESSAGE LISTENER ======
-@client.event
+@bot.event
 async def on_message(message):
-    if not message.guild:
-        return
+    global marked_words
 
     if message.author.bot:
         return
 
-    data = get_data(message.guild.id)
-
-    if not data["active"]:
-        return
-
-    # Combine message content
     content = message.content.lower()
 
-    # Add sticker names
-    for sticker in message.stickers:
-        content += " " + sticker.name.lower()
-
-    # Add custom emoji names
-    emoji_matches = re.findall(r"<a?:([a-zA-Z0-9_]+):\d+>", message.content)
-    for emoji_name in emoji_matches:
-        content += " " + emoji_name.lower()
-
     for word in BINGO_WORDS:
-        if word in content and word not in data["marked"]:
-            data["marked"].add(word)
-            await message.channel.send(f"🎯 Marked: **{word}**")
+        if word in content and word not in marked_words:
+            marked_words.add(word)
+            await message.channel.send(f"✅ Word marked: {word}")
 
-            # BLACKOUT WIN
-            if len(data["marked"]) == len(BINGO_WORDS):
-                await message.channel.send(
-                    f"🎉 {message.author.mention} COMPLETED BLACKOUT BINGO!!! 🎉\n"
-                    "https://media.tenor.com/6gHLhmwO87sAAAAC/anime-celebration.gif"
-                )
-                data["active"] = False
-            break
+    if len(marked_words) >= 36:
+        await message.channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
+        marked_words.clear()
 
-# ==============================
-# SLASH COMMANDS (ONLY IN #bingo)
-# ==============================
+    await bot.process_commands(message)
 
-@tree.command(name="startgame", description="Start the bingo game")
-async def startgame(interaction: discord.Interaction):
-    if interaction.channel.name != "bingo":
-        await interaction.response.send_message(
-            "Use this command in #bingo channel.",
-            ephemeral=True
-        )
-        return
+# =========================
+# START BOT
+# =========================
 
-    data = get_data(interaction.guild.id)
-    data["active"] = True
-    data["marked"] = set()
-
-    await interaction.response.send_message(
-        "🔥 Bingo game started! Fill all squares to win!"
-    )
-
-@tree.command(name="reset", description="Reset the bingo board")
-async def reset(interaction: discord.Interaction):
-    if interaction.channel.name != "bingo":
-        await interaction.response.send_message(
-            "Use this command in #bingo channel.",
-            ephemeral=True
-        )
-        return
-
-    data = get_data(interaction.guild.id)
-    data["active"] = False
-    data["marked"] = set()
-
-    await interaction.response.send_message("♻️ Bingo board reset.")
-
-@tree.command(name="board", description="Show bingo progress")
-async def board(interaction: discord.Interaction):
-    if interaction.channel.name != "bingo":
-        await interaction.response.send_message(
-            "Use this command in #bingo channel.",
-            ephemeral=True
-        )
-        return
-
-    data = get_data(interaction.guild.id)
-
-    total = len(BINGO_WORDS)
-    marked = len(data["marked"])
-    percent = int((marked / total) * 100)
-
-    await interaction.response.send_message(
-        f"🎯 BLACKOUT PROGRESS\n\n"
-        f"Marked: {marked}/{total}\n"
-        f"Remaining: {total - marked}\n"
-        f"Progress: {percent}%"
-    )
-
-# ====== RUN BOT ======
-client.run(TOKEN)
+keep_alive()
+bot.run(TOKEN)
