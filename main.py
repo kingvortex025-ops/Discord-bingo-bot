@@ -60,11 +60,11 @@ BINGO_WORDS = [
 ]
 
 ANIME_GIFS = [
-    "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif",
-    "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif",
-    "https://media.giphy.com/media/26xBukhV6Z7V0F7sA/giphy.gif",
-    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif",
-    "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif"
+    "https://media.giphy.com/media/10YWqUivkQPeeJWD3u/giphy.gif",
+    "https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif",
+    "https://media.giphy.com/media/12TXrKlBU2LxkY/giphy.gif",
+    "https://media.giphy.com/media/l4FGuhL4U2WyjdkaY/giphy.gif",
+    "https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif"
 ]
 
 board_words = []
@@ -102,7 +102,7 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    global marked_words
+    global marked_words, game_active
 
     if message.author.bot:
         return
@@ -111,50 +111,57 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
+    if not message.guild:
+        return
+
     content = message.content.lower()
 
     # Find bingo channel
-    bingo_channel = None
-    for channel in message.guild.channels:
-        if channel.name == BINGO_CHANNEL_NAME:
-            bingo_channel = channel
-            break
+    bingo_channel = discord.utils.get(message.guild.channels, name=BINGO_CHANNEL_NAME)
 
     if not bingo_channel:
         return
+
+    triggered = False
 
     # WORD TRIGGER
     for word in board_words:
         if word in content and word not in marked_words:
             marked_words.add(word)
+            triggered = True
             await bingo_channel.send(
-                f"✅ **{word}** marked by **{message.author.display_name}**!"
+                f"✅ **{word}** marked by {message.author.mention}!"
             )
+            break
 
     # STICKER TRIGGER
     if message.stickers:
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
-                random_word = random.choice(board_words)
-                if random_word not in marked_words:
+                available_words = [w for w in board_words if w not in marked_words]
+                if available_words:
+                    random_word = random.choice(available_words)
                     marked_words.add(random_word)
+                    triggered = True
                     await bingo_channel.send(
-                        f"🎯 Sticker used by **{message.author.display_name}** marked **{random_word}**!"
+                        f"🎯 Sticker used by {message.author.mention} marked **{random_word}**!"
                     )
+                break
 
     # BLACKOUT WIN
-    if game_active and len(marked_words) >= GRID_SIZE * GRID_SIZE:
+    if triggered and len(marked_words) >= GRID_SIZE * GRID_SIZE:
 
         await bingo_channel.send(
-            f"🎉🔥 BINGO BLACKOUT COMPLETE! 🔥🎉\n"
-            f"🏆 Winner: **{message.author.display_name}**\n"
-            f"Congratulations!!"
+            f"🎉🔥 **BINGO BLACKOUT COMPLETE!** 🔥🎉\n"
+            f"🏆 Winner: {message.author.mention}\n"
+            f"Congratulations!!!"
         )
 
         random_gif = random.choice(ANIME_GIFS)
         await bingo_channel.send(random_gif)
 
         marked_words.clear()
+        game_active = False
 
     await bot.process_commands(message)
 
@@ -167,7 +174,7 @@ async def ping(ctx):
     await ctx.send("🏓 Pong!")
 
 # =========================
-# SLASH COMMANDS (ONLY IN #bingo)
+# SLASH COMMANDS
 # =========================
 
 @bot.tree.command(name="start", description="Start a new bingo game")
@@ -189,6 +196,7 @@ async def start(interaction: discord.Interaction):
 
 @bot.tree.command(name="board", description="Show current bingo board")
 async def board(interaction: discord.Interaction):
+
     if interaction.channel.name != BINGO_CHANNEL_NAME:
         await interaction.response.send_message(
             "❌ Use this in #bingo channel only.",
