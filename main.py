@@ -59,6 +59,14 @@ BINGO_WORDS = [
     "fuck","die","bum","pedophile","im goated"
 ]
 
+ANIME_GIFS = [
+    "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif",
+    "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif",
+    "https://media.giphy.com/media/26xBukhV6Z7V0F7sA/giphy.gif",
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif",
+    "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif"
+]
+
 board_words = []
 marked_words = set()
 game_active = False
@@ -105,7 +113,7 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    # Find bingo channel once
+    # Find bingo channel
     bingo_channel = None
     for channel in message.guild.channels:
         if channel.name == BINGO_CHANNEL_NAME:
@@ -115,7 +123,7 @@ async def on_message(message):
     if not bingo_channel:
         return
 
-    # WORD TRIGGER (detect everywhere, announce only in #bingo)
+    # WORD TRIGGER
     for word in board_words:
         if word in content and word not in marked_words:
             marked_words.add(word)
@@ -128,7 +136,6 @@ async def on_message(message):
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
                 random_word = random.choice(board_words)
-
                 if random_word not in marked_words:
                     marked_words.add(random_word)
                     await bingo_channel.send(
@@ -137,7 +144,16 @@ async def on_message(message):
 
     # BLACKOUT WIN
     if game_active and len(marked_words) >= GRID_SIZE * GRID_SIZE:
-        await bingo_channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
+
+        await bingo_channel.send(
+            f"🎉🔥 BINGO BLACKOUT COMPLETE! 🔥🎉\n"
+            f"🏆 Winner: **{message.author.display_name}**\n"
+            f"Congratulations!!"
+        )
+
+        random_gif = random.choice(ANIME_GIFS)
+        await bingo_channel.send(random_gif)
+
         marked_words.clear()
 
     await bot.process_commands(message)
