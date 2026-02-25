@@ -69,14 +69,18 @@ game_active = False
 
 def generate_board():
     board_text = ""
+
     for i in range(GRID_SIZE):
         for j in range(GRID_SIZE):
             word = board_words[i * GRID_SIZE + j]
+
             if word in marked_words:
-                board_text += "🟩 "
+                board_text += f"🟩 {word}\t"
             else:
-                board_text += "🟥 "
-        board_text += "\n"
+                board_text += f"🟥 {word}\t"
+
+        board_text += "\n\n"
+
     return board_text
 
 # =========================
@@ -95,18 +99,18 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if message.channel.name != BINGO_CHANNEL_NAME:
-        return
-
     if not game_active:
+        await bot.process_commands(message)
         return
 
     content = message.content.lower()
 
+    # Word trigger (ALL channels)
     for word in board_words:
         if word in content:
             marked_words.add(word)
 
+    # Sticker trigger (ALL channels)
     if message.stickers:
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
@@ -114,8 +118,12 @@ async def on_message(message):
                 marked_words.add(random_word)
                 await message.channel.send("🎯 Sticker triggered a random mark!")
 
+    # Blackout win (announce in bingo channel)
     if len(marked_words) >= GRID_SIZE * GRID_SIZE:
-        await message.channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
+        for guild_channel in message.guild.channels:
+            if guild_channel.name == BINGO_CHANNEL_NAME:
+                await guild_channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
+                break
         marked_words.clear()
 
     await bot.process_commands(message)
@@ -126,12 +134,10 @@ async def on_message(message):
 
 @bot.command()
 async def ping(ctx):
-    if ctx.channel.name != BINGO_CHANNEL_NAME:
-        return
     await ctx.send("🏓 Pong!")
 
 # =========================
-# SLASH COMMANDS
+# SLASH COMMANDS (BINGO ONLY)
 # =========================
 
 @bot.tree.command(name="start", description="Start a new bingo game")
