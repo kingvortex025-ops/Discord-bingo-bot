@@ -105,20 +105,34 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    # WORD TRIGGER (ALL CHANNELS)
+    # WORD TRIGGER (FROM ANY CHANNEL)
     for word in board_words:
         if word in content and word not in marked_words:
             marked_words.add(word)
-            await message.channel.send(f"✅ **{word}** marked on the board!")
 
-    # STICKER TRIGGER (ALL CHANNELS)
+            # Always announce in #bingo
+            for channel in message.guild.channels:
+                if channel.name == BINGO_CHANNEL_NAME:
+                    await channel.send(
+                        f"✅ **{word}** marked by **{message.author.display_name}**!"
+                    )
+                    break
+
+    # STICKER TRIGGER (FROM ANY CHANNEL)
     if message.stickers:
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
                 random_word = random.choice(board_words)
+
                 if random_word not in marked_words:
                     marked_words.add(random_word)
-                    await message.channel.send(f"🎯 Sticker marked **{random_word}**!")
+
+                    for channel in message.guild.channels:
+                        if channel.name == BINGO_CHANNEL_NAME:
+                            await channel.send(
+                                f"🎯 Sticker used by **{message.author.display_name}** marked **{random_word}**!"
+                            )
+                            break
 
     # BLACKOUT WIN (announce in #bingo)
     if game_active and len(marked_words) >= GRID_SIZE * GRID_SIZE:
@@ -139,7 +153,7 @@ async def ping(ctx):
     await ctx.send("🏓 Pong!")
 
 # =========================
-# SLASH COMMANDS (BINGO ONLY)
+# SLASH COMMANDS (ONLY IN #bingo)
 # =========================
 
 @bot.tree.command(name="start", description="Start a new bingo game")
