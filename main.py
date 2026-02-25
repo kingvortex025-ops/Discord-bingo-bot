@@ -105,20 +105,25 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    # WORD TRIGGER (FROM ANY CHANNEL)
+    # Find bingo channel once
+    bingo_channel = None
+    for channel in message.guild.channels:
+        if channel.name == BINGO_CHANNEL_NAME:
+            bingo_channel = channel
+            break
+
+    if not bingo_channel:
+        return
+
+    # WORD TRIGGER (detect everywhere, announce only in #bingo)
     for word in board_words:
         if word in content and word not in marked_words:
             marked_words.add(word)
+            await bingo_channel.send(
+                f"✅ **{word}** marked by **{message.author.display_name}**!"
+            )
 
-            # Always announce in #bingo
-            for channel in message.guild.channels:
-                if channel.name == BINGO_CHANNEL_NAME:
-                    await channel.send(
-                        f"✅ **{word}** marked by **{message.author.display_name}**!"
-                    )
-                    break
-
-    # STICKER TRIGGER (FROM ANY CHANNEL)
+    # STICKER TRIGGER
     if message.stickers:
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
@@ -126,20 +131,13 @@ async def on_message(message):
 
                 if random_word not in marked_words:
                     marked_words.add(random_word)
+                    await bingo_channel.send(
+                        f"🎯 Sticker used by **{message.author.display_name}** marked **{random_word}**!"
+                    )
 
-                    for channel in message.guild.channels:
-                        if channel.name == BINGO_CHANNEL_NAME:
-                            await channel.send(
-                                f"🎯 Sticker used by **{message.author.display_name}** marked **{random_word}**!"
-                            )
-                            break
-
-    # BLACKOUT WIN (announce in #bingo)
+    # BLACKOUT WIN
     if game_active and len(marked_words) >= GRID_SIZE * GRID_SIZE:
-        for channel in message.guild.channels:
-            if channel.name == BINGO_CHANNEL_NAME:
-                await channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
-                break
+        await bingo_channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
         marked_words.clear()
 
     await bot.process_commands(message)
