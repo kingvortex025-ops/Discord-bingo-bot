@@ -59,8 +59,9 @@ BINGO_WORDS = [
     "fuck","die","bum","pedophile","im goated"
 ]
 
-board_words = random.sample(BINGO_WORDS, GRID_SIZE * GRID_SIZE)
+board_words = []
 marked_words = set()
+game_active = False
 
 # =========================
 # BOARD GENERATOR
@@ -84,12 +85,7 @@ def generate_board():
 
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Slash commands synced: {len(synced)}")
-    except Exception as e:
-        print(e)
-
+    await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
 @bot.event
@@ -99,18 +95,18 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Only allow in #bingo channel
     if message.channel.name != BINGO_CHANNEL_NAME:
+        return
+
+    if not game_active:
         return
 
     content = message.content.lower()
 
-    # Word trigger
     for word in board_words:
         if word in content:
             marked_words.add(word)
 
-    # Sticker trigger
     if message.stickers:
         for sticker in message.stickers:
             if sticker.id == STICKER_TRIGGER_ID:
@@ -118,7 +114,6 @@ async def on_message(message):
                 marked_words.add(random_word)
                 await message.channel.send("🎯 Sticker triggered a random mark!")
 
-    # Check blackout win
     if len(marked_words) >= GRID_SIZE * GRID_SIZE:
         await message.channel.send("🎉 BINGO BLACKOUT COMPLETE! 🎉")
         marked_words.clear()
@@ -139,14 +134,38 @@ async def ping(ctx):
 # SLASH COMMANDS
 # =========================
 
+@bot.tree.command(name="start", description="Start a new bingo game")
+async def start(interaction: discord.Interaction):
+    global board_words, marked_words, game_active
+
+    if interaction.channel.name != BINGO_CHANNEL_NAME:
+        await interaction.response.send_message(
+            "❌ Use this in #bingo channel only.",
+            ephemeral=True
+        )
+        return
+
+    board_words = random.sample(BINGO_WORDS, GRID_SIZE * GRID_SIZE)
+    marked_words.clear()
+    game_active = True
+
+    await interaction.response.send_message("🎮 Bingo game started!")
+
 @bot.tree.command(name="board", description="Show current bingo board")
 async def board(interaction: discord.Interaction):
     if interaction.channel.name != BINGO_CHANNEL_NAME:
         await interaction.response.send_message(
-            "❌ This command can only be used in #bingo channel.",
+            "❌ Use this in #bingo channel only.",
             ephemeral=True
         )
         return
+
+    if not game_active:
+        await interaction.response.send_message(
+            "❌ No active bingo game. Use /start first."
+        )
+        return
+
     await interaction.response.send_message(generate_board())
 
 @bot.tree.command(name="reset", description="Reset the bingo board")
@@ -155,17 +174,24 @@ async def reset(interaction: discord.Interaction):
 
     if interaction.channel.name != BINGO_CHANNEL_NAME:
         await interaction.response.send_message(
-            "❌ This command can only be used in #bingo channel.",
+            "❌ Use this in #bingo channel only.",
             ephemeral=True
+        )
+        return
+
+    if not game_active:
+        await interaction.response.send_message(
+            "❌ No active game to reset."
         )
         return
 
     board_words = random.sample(BINGO_WORDS, GRID_SIZE * GRID_SIZE)
     marked_words.clear()
+
     await interaction.response.send_message("🔄 Bingo board reset!")
 
 # =========================
-# START
+# START BOT
 # =========================
 
 keep_alive()
